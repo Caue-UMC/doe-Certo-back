@@ -1,0 +1,190 @@
+@startuml
+
+package "Domain" {
+    class Doador {
+        - idDoador: Long
+        - nome: String
+        - email: String
+        - senha: String
+        - dt_nascimento: String
+        + getIdDoador(): Long
+        + getNome(): String
+        + getEmail(): String
+        + getSenha(): String
+        + getDtNascimento(): String
+        + setNome(String): void
+        + setEmail(String): void
+        + setSenha(String): void
+        + setDtNascimento(String): void
+    }
+
+    class Instituicao {
+        - idInstituicao: Long
+        - nomeInstituicao: String
+        - email: String
+        - senha: String
+        - categoria: CategoriasInstituicao
+        - cnpj: String
+        - endereco: String
+        - telefone: String
+        + getIdInstituicao(): Long
+        + getNomeInstituicao(): String
+        + getEmail(): String
+        + getSenha(): String
+        + getCategoria(): CategoriasInstituicao
+        + setNomeInstituicao(String): void
+        + setEmail(String): void
+        + setSenha(String): void
+        + setCategoria(CategoriasInstituicao): void
+        + setCnpj(String): void
+        + setEndereco(String): void
+        + setTelefone(String): void
+    }
+
+    enum CategoriasInstituicao {
+        ONG
+        ESCOLA
+        HOSPITAL
+        IGREJA
+        CULTURA
+        OUTRA
+    }
+}
+
+package "DTOs" {
+    class LoginRequestDTO {
+        - email: String
+        - senha: String
+        + getEmail(): String
+        + getSenha(): String
+    }
+
+    class RegisterDoadorDTO {
+        - nome: String
+        - email: String
+        - senha: String
+        - dt_nascimento: String
+        + getNome(): String
+        + getEmail(): String
+        + getSenha(): String
+        + getDtNascimento(): String
+    }
+
+    class RegisterInstituicaoDTO {
+        - nomeInstituicao: String
+        - email: String
+        - senha: String
+        - categoria: CategoriasInstituicao
+        - cnpj: String
+        - endereco: String
+        - telefone: String
+        + getNomeInstituicao(): String
+        + getEmail(): String
+        + getSenha(): String
+        + getCategoria(): CategoriasInstituicao
+        + getCnpj(): String
+        + getEndereco(): String
+        + getTelefone(): String
+    }
+
+    class ResponseDTO {
+        - nome: String
+        - token: String
+        + getNome(): String
+        + getToken(): String
+    }
+}
+
+package "Services" {
+    class TokenService {
+        - secret: String
+        + gerarTokenDoador(Doador): String
+        + gerarTokenInstituicao(Instituicao): String
+        + validaToken(String): String
+        + generateExpirationDate(): Instant
+    }
+
+    class AuthService {
+        - doadorRepository: DoadorRepository
+        - instituicaoRepository: InstituicaoRepository
+        - passwordEncoder: PasswordEncoder
+        - tokenService: TokenService
+        + login(LoginRequestDTO): ResponseDTO
+    }
+}
+
+package "Controllers" {
+    class DoadorController {
+        + login(LoginRequestDTO): ResponseEntity<ResponseDTO>
+        + register(RegisterDoadorDTO): ResponseEntity<ResponseDTO>
+        + getAllDoadors(): ResponseEntity<List<Doador>>
+        + getDoadorById(Long): ResponseEntity<Doador>
+        + getDoadorByNome(String): ResponseEntity<Doador>
+        + updateDoador(Long, Doador): ResponseEntity<Doador>
+        + deleteDoador(Long): ResponseEntity<Void>
+    }
+
+    class InstituicaoController {
+        + login(LoginRequestDTO): ResponseEntity<ResponseDTO>
+        + register(RegisterInstituicaoDTO): ResponseEntity<ResponseDTO>
+        + getAllInstituicoes(): ResponseEntity<List<Instituicao>>
+        + getInstituicaoByCategoria(String): ResponseEntity<List<Instituicao>>
+        + getInstituicaoById(Long): ResponseEntity<Instituicao>
+        + updateInstituicao(Long, RegisterInstituicaoDTO): ResponseEntity<Instituicao>
+        + deleteInstituicao(Long): ResponseEntity<Void>
+    }
+}
+
+package "Repositories" {
+    interface DoadorRepository {
+        + findByEmail(String): Optional<Doador>
+        + findByNome(String): Optional<Doador>
+    }
+
+    interface InstituicaoRepository {
+        + findByEmail(String): Optional<Instituicao>
+        + findByCategoria(CategoriasInstituicao): List<Instituicao>
+    }
+}
+
+package "Infra.Security" {
+    class TokenService {
+        - secret: String
+        + gerarTokenDoador(Doador): String
+        + gerarTokenInstituicao(Instituicao): String
+        + validaToken(String): String
+        + generateExpirationDate(): Instant
+    }
+
+    class CustomUserDetailsService {
+        + loadUser ByUsername(String): UserDetails
+    }
+
+    class SecurityConfig {
+        + securityFilterChain(HttpSecurity): SecurityFilterChain
+        + passwordEncoder(): PasswordEncoder
+        + authenticationManager(AuthenticationConfiguration): AuthenticationManager
+    }
+
+    class SecurityFilter {
+        + doFilterInternal(HttpServletRequest, HttpServletResponse, FilterChain): void
+        - recoverToken(HttpServletRequest): String
+    }
+}
+
+Doador --> TokenService : gera token
+Instituicao --> TokenService : gera token
+LoginRequestDTO --> AuthService : usado para login
+RegisterDoadorDTO --> AuthService : usado para registro de doador
+RegisterInstituicaoDTO --> AuthService : usado para registro de instituição
+ResponseDTO --> AuthService : resposta de login
+DoadorController --> AuthService : usa para login e registro
+InstituicaoController --> AuthService : usa para login e registro
+DoadorRepository --> Doador : gerencia
+InstituicaoRepository --> Instituicao : gerencia
+CustomUserDetailsService --> DoadorRepository : usa para autenticação
+CustomUserDetailsService --> InstituicaoRepository : usa para autenticação
+SecurityConfig --> SecurityFilter : configura
+SecurityFilter --> TokenService : valida token
+
+@enduml
