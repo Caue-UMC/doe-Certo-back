@@ -12,5 +12,6 @@ public record RegisterInstituicaoDTO(
         CategoriasInstituicao categoria,
         String cnpj,
         String endereco,
-        String telefone
+        String telefone,
+        String imagemPerfil
 ) {}

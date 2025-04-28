@@ -2,10 +2,7 @@ package com.example.doeCerto.controllers;
 
 import com.example.doeCerto.domain.CategoriasInstituicao;
 import com.example.doeCerto.domain.Instituicao;
-import com.example.doeCerto.dtos.LoginRequestDTO;
-import com.example.doeCerto.dtos.LoginResponseDTO;
-import com.example.doeCerto.dtos.RegisterInstituicaoDTO;
-import com.example.doeCerto.dtos.ResponseDTO;
+import com.example.doeCerto.dtos.*;
 import com.example.doeCerto.infra.security.TokenService;
 import com.example.doeCerto.repositories.InstituicaoRepository;
 import com.example.doeCerto.services.AuthService;
@@ -64,6 +61,7 @@ public class InstituicaoController {
             newInstituicao.setCnpj(body.cnpj());
             newInstituicao.setEndereco(body.endereco());
             newInstituicao.setTelefone(body.telefone());
+            newInstituicao.setImagemPerfil(body.imagemPerfil());
             repository.save(newInstituicao);
 
             String token = tokenService.gerarTokenInstituicao(newInstituicao);
@@ -74,28 +72,62 @@ public class InstituicaoController {
 
     //Listar todas instituicoes
     @GetMapping
-    public ResponseEntity<List<Instituicao>> getAllInstituicoes() {
-        List<Instituicao> instituicoes = repository.findAll();
+    public ResponseEntity<List<InstituicaoResponseDTO>> getAllInstituicoes() {
+        List<InstituicaoResponseDTO> instituicoes = repository.findAll()
+                .stream()
+                .map(instituicao -> new InstituicaoResponseDTO(
+                        instituicao.getNomeInstituicao(),
+                        instituicao.getEndereco(),
+                        instituicao.getTelefone(),
+                        instituicao.getImagemPerfil(),
+                        instituicao.getCategoria()
+                ))
+                .toList();
         return ResponseEntity.ok(instituicoes);
     }
 
+
     //Listar por categoria
     @GetMapping("/categoria/{categoria}")
-    public ResponseEntity<List<Instituicao>> getInstituicaoByCategoria(@PathVariable String categoria) {
+    public ResponseEntity<List<InstituicaoResponseDTO>> getInstituicaoByCategoria(@PathVariable String categoria) {
         try {
             CategoriasInstituicao categoriaEnum = CategoriasInstituicao.valueOf(categoria.toUpperCase());
-            List<Instituicao> instituicoes = repository.findByCategoria(categoriaEnum);
+            List<InstituicaoResponseDTO> instituicoes = repository.findByCategoria(categoriaEnum)
+                    .stream()
+                    .map(instituicao -> new InstituicaoResponseDTO(
+                            instituicao.getNomeInstituicao(),
+                            instituicao.getEndereco(),
+                            instituicao.getTelefone(),
+                            instituicao.getImagemPerfil(),
+                            instituicao.getCategoria()
+
+                    ))
+                    .toList();
             return ResponseEntity.ok(instituicoes);
         } catch (IllegalArgumentException e) {
-            return ResponseEntity.badRequest().body(null);
+            return ResponseEntity.badRequest().build();
         }
     }
 
     //Listar por ID
     @GetMapping("/{id}")
-    public ResponseEntity<Instituicao> getInstituicaoById(@PathVariable Long id) {
-        Optional<Instituicao> instituicao = repository.findById(id);
-        return instituicao.map(ResponseEntity::ok).orElseGet(() -> ResponseEntity.notFound().build());
+    public ResponseEntity<InstituicaoResponseDTO> getInstituicaoById(@PathVariable Long id) {
+        Optional<Instituicao> optionalInstituicao = repository.findById(id);
+
+        if (optionalInstituicao.isPresent()) {
+            Instituicao instituicao = optionalInstituicao.get();
+            InstituicaoResponseDTO responseDTO = new InstituicaoResponseDTO(
+                    instituicao.getNomeInstituicao(),
+                    instituicao.getEndereco(),
+                    instituicao.getTelefone(),
+                    instituicao.getImagemPerfil(),
+                    instituicao.getCategoria()
+
+            );
+            return ResponseEntity.ok(responseDTO);
+        }
+
+        return ResponseEntity.notFound().build();
     }
 
     // Editar por ID
@@ -109,16 +141,30 @@ public class InstituicaoController {
         if (optionalInstituicao.isPresent()) {
             Instituicao instituicao = optionalInstituicao.get();
 
-            instituicao.setNomeInstituicao(body.nomeInstituicao());
-            instituicao.setEmail(body.email());
-            instituicao.setCategoria(body.categoria());
-            instituicao.setCnpj(body.cnpj());
-            instituicao.setEndereco(body.endereco());
-            instituicao.setTelefone(body.telefone());
-
-            // 🔒 NÃO sobrescreve a senha se ela não for enviada
+            // Se nao tiver nada, nao afeta o BD
+            if (body.nomeInstituicao() != null && !body.nomeInstituicao().isBlank()) {
+                instituicao.setNomeInstituicao(body.nomeInstituicao());
+            }
+            if (body.email() != null && !body.email().isBlank()) {
+                instituicao.setEmail(body.email());
+            }
+            if (body.cnpj() != null && !body.cnpj().isBlank()) {
+                instituicao.setCnpj(body.cnpj());
+            }
+            if (body.telefone() != null && !body.telefone().isBlank()) {
+                instituicao.setTelefone(body.telefone());
+            }
+            if (body.endereco() != null && !body.endereco().isBlank()) {
+                instituicao.setEndereco(body.endereco());
+            }
+            if (body.categoria() != null) {
+                instituicao.setCategoria(body.categoria());
+            }
             if (body.senha() != null && !body.senha().isBlank()) {
                 instituicao.setSenha(passwordEncoder.encode(body.senha()));
+            }
+            if (body.imagemPerfil() != null && !body.imagemPerfil().isBlank()) {
+                instituicao.setImagemPerfil(body.imagemPerfil());
             }
 
             repository.save(instituicao);
@@ -127,6 +173,7 @@ public class InstituicaoController {
 
         return ResponseEntity.notFound().build();
     }
+
 //    @PutMapping("/{id}")
 //    public ResponseEntity<Instituicao> updateInstituicao(@PathVariable Long id, @RequestBody RegisterInstituicaoDTO body) {
 //        if (!instituicaoService.validaCategoria(String.valueOf(body.categoria()))) { // Chamando validação do serviço
@@ -158,4 +205,15 @@ public class InstituicaoController {
         }
         return ResponseEntity.notFound().build();
     }
+
+    // Para ver se funciona pegando a lista de Enum Categoria
+    @GetMapping("/categorias")
+    public ResponseEntity<List<String>> listarCategorias() {
+        List<String> categorias = List.of(CategoriasInstituicao.values())
+                .stream()
+                .map(Enum::name)
+                .toList();
+        return ResponseEntity.ok(categorias);
+    }
+
 }

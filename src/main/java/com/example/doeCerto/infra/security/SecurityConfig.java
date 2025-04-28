@@ -88,11 +88,14 @@ public class SecurityConfig {
                 .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.STATELESS))
                 // Autorizações dos endpoints públicos e protegidos
                 .authorizeHttpRequests(authorize -> authorize
-                        .requestMatchers(HttpMethod.POST, "/doadores/login").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/doadores/cadastro").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/instituicoes/cadastro").permitAll()
-                        .requestMatchers(HttpMethod.POST, "/instituicoes/login").permitAll()
-                        .anyRequest().authenticated()
+                                .requestMatchers(HttpMethod.POST, "/doadores/login").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/doadores/cadastro").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/instituicoes/cadastro").permitAll()
+                                .requestMatchers(HttpMethod.POST, "/instituicoes/login").permitAll()
+                                .requestMatchers(HttpMethod.GET, "/instituicoes/**").permitAll() // ✅ AQUI CORRIGIDO
+                                .requestMatchers(HttpMethod.GET, "/produtos/**").permitAll()
+                                .requestMatchers(HttpMethod.GET, "/categorias").permitAll()
+                                .anyRequest().authenticated()
                 )
                 // Seu filtro de segurança de JWT antes do UsernamePasswordAuthenticationFilter
                 .addFilterBefore(securityFilter, UsernamePasswordAuthenticationFilter.class);
