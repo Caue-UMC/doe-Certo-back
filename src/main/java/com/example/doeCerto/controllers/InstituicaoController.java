@@ -12,9 +12,12 @@ import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.web.bind.annotation.*;
+import org.springframework.web.multipart.MultipartFile;
 
 import javax.validation.Valid;
+import java.util.Base64;
 import java.util.List;
+import java.util.Map;
 import java.util.Optional;
 
 @RestController
@@ -28,6 +31,7 @@ public class InstituicaoController {
     private final PasswordEncoder passwordEncoder;
     private final InstituicaoService instituicaoService;
 
+    // Endpoint de login para instituições
     @PostMapping("/login")
     public ResponseEntity<LoginResponseDTO> login(@Valid @RequestBody LoginRequestDTO body) {
         Optional<Instituicao> instituicao = repository.findByEmail(body.email());
@@ -38,39 +42,38 @@ public class InstituicaoController {
         return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
     }
 
-//    @PostMapping("/login")
-//    public ResponseEntity<ResponseDTO> login(@Valid @RequestBody LoginRequestDTO body) {
-//        ResponseDTO response = authService.login(body);
-//        if (response != null) {
-//            return ResponseEntity.ok(response);
-//        }
-//        return ResponseEntity.status(HttpStatus.UNAUTHORIZED).body(new ResponseDTO("Credenciais inválidas", null));
-//    }
-
-    // Cadastrar nova instituicao e verifica categoria existente
+    // Cadastrar nova instituição com verificação de duplicidade
     @PostMapping("/cadastro")
     public ResponseEntity<ResponseDTO> register(@Valid @RequestBody RegisterInstituicaoDTO body) {
-
-        Optional<Instituicao> instituicao = repository.findByEmail(body.email());
-        if (instituicao.isEmpty()) {
-            Instituicao newInstituicao = new Instituicao();
-            newInstituicao.setNomeInstituicao(body.nomeInstituicao());
-            newInstituicao.setEmail(body.email());
-            newInstituicao.setSenha(passwordEncoder.encode(body.senha()));
-            newInstituicao.setCategoria(body.categoria());
-            newInstituicao.setCnpj(body.cnpj());
-            newInstituicao.setEndereco(body.endereco());
-            newInstituicao.setTelefone(body.telefone());
-            newInstituicao.setImagemPerfil(body.imagemPerfil());
-            repository.save(newInstituicao);
-
-            String token = tokenService.gerarTokenInstituicao(newInstituicao);
-            return ResponseEntity.ok(new ResponseDTO(newInstituicao.getNomeInstituicao(), token));
+        // Verifica duplicidade por email e me ajuda no front
+        List<Instituicao> byEmail = repository.findAllByEmail(body.email());
+        if (!byEmail.isEmpty()) {
+            return ResponseEntity.badRequest().body(new ResponseDTO("Email já cadastrado.", null));
         }
-        return ResponseEntity.badRequest().body(new ResponseDTO("Instituição já cadastrada.", null));
+
+        // Verifica duplicidade por CNPJ e me ajuda no front
+        List<Instituicao> byCnpj = repository.findAllByCnpj(body.cnpj());
+        if (!byCnpj.isEmpty()) {
+            return ResponseEntity.badRequest().body(new ResponseDTO("CNPJ já cadastrado.", null));
+        }
+
+        // Continua o cadastro
+        Instituicao newInstituicao = new Instituicao();
+        newInstituicao.setNomeInstituicao(body.nomeInstituicao());
+        newInstituicao.setEmail(body.email());
+        newInstituicao.setSenha(passwordEncoder.encode(body.senha()));
+        newInstituicao.setCategoria(body.categoria());
+        newInstituicao.setCnpj(body.cnpj());
+        newInstituicao.setEndereco(body.endereco());
+        newInstituicao.setTelefone(body.telefone());
+        newInstituicao.setImagemPerfil(body.imagemPerfil());
+        repository.save(newInstituicao);
+
+        String token = tokenService.gerarTokenInstituicao(newInstituicao);
+        return ResponseEntity.ok(new ResponseDTO(newInstituicao.getNomeInstituicao(), token));
     }
 
-    //Listar todas instituicoes
+    // Lista todas as instituições
     @GetMapping
     public ResponseEntity<List<InstituicaoResponseDTO>> getAllInstituicoes() {
         List<InstituicaoResponseDTO> instituicoes = repository.findAll()
@@ -86,8 +89,7 @@ public class InstituicaoController {
         return ResponseEntity.ok(instituicoes);
     }
 
-
-    //Listar por categoria
+    // Lista instituições por categoria
     @GetMapping("/categoria/{categoria}")
     public ResponseEntity<List<InstituicaoResponseDTO>> getInstituicaoByCategoria(@PathVariable String categoria) {
         try {
@@ -100,7 +102,6 @@ public class InstituicaoController {
                             instituicao.getTelefone(),
                             instituicao.getImagemPerfil(),
                             instituicao.getCategoria()
-
                     ))
                     .toList();
             return ResponseEntity.ok(instituicoes);
@@ -109,104 +110,114 @@ public class InstituicaoController {
         }
     }
 
-    //Listar por ID
+    // Busca instituição por ID (com validação do token)
     @GetMapping("/{id}")
-    public ResponseEntity<InstituicaoResponseDTO> getInstituicaoById(@PathVariable Long id) {
+    public ResponseEntity<InstituicaoResponseDTO> getInstituicaoById(
+            @PathVariable Long id,
+            @RequestHeader("Authorization") String token
+    ) {
+        String emailToken = tokenService.validaToken(token.replace("Bearer ", ""));
         Optional<Instituicao> optionalInstituicao = repository.findById(id);
 
-        if (optionalInstituicao.isPresent()) {
-            Instituicao instituicao = optionalInstituicao.get();
-            InstituicaoResponseDTO responseDTO = new InstituicaoResponseDTO(
-                    instituicao.getNomeInstituicao(),
-                    instituicao.getEndereco(),
-                    instituicao.getTelefone(),
-                    instituicao.getImagemPerfil(),
-                    instituicao.getCategoria()
-
-            );
-            return ResponseEntity.ok(responseDTO);
+        if (optionalInstituicao.isEmpty()) {
+            return ResponseEntity.notFound().build();
         }
 
-        return ResponseEntity.notFound().build();
+        Instituicao instituicao = optionalInstituicao.get();
+
+        if (!instituicao.getEmail().equals(emailToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        InstituicaoResponseDTO responseDTO = new InstituicaoResponseDTO(
+                instituicao.getNomeInstituicao(),
+                instituicao.getEndereco(),
+                instituicao.getTelefone(),
+                instituicao.getImagemPerfil(),
+                instituicao.getCategoria()
+        );
+        return ResponseEntity.ok(responseDTO);
     }
 
-    // Editar por ID
+    // Atualiza dados da instituição (com verificação de senha)
     @PutMapping("/{id}")
-    public ResponseEntity<Instituicao> updateInstituicao(@PathVariable Long id, @RequestBody RegisterInstituicaoDTO body) {
-        if (!instituicaoService.validaCategoria(String.valueOf(body.categoria()))) {
-            return ResponseEntity.badRequest().body(null);
-        }
-
+    public ResponseEntity<?> updateInstituicao(
+            @PathVariable Long id,
+            @RequestBody @Valid UpdateInstituicaoDTO body,
+            @RequestHeader("Authorization") String token
+    ) {
+        String emailToken = tokenService.validaToken(token.replace("Bearer ", ""));
         Optional<Instituicao> optionalInstituicao = repository.findById(id);
-        if (optionalInstituicao.isPresent()) {
-            Instituicao instituicao = optionalInstituicao.get();
 
-            // Se nao tiver nada, nao afeta o BD
-            if (body.nomeInstituicao() != null && !body.nomeInstituicao().isBlank()) {
-                instituicao.setNomeInstituicao(body.nomeInstituicao());
-            }
-            if (body.email() != null && !body.email().isBlank()) {
-                instituicao.setEmail(body.email());
-            }
-            if (body.cnpj() != null && !body.cnpj().isBlank()) {
-                instituicao.setCnpj(body.cnpj());
-            }
-            if (body.telefone() != null && !body.telefone().isBlank()) {
-                instituicao.setTelefone(body.telefone());
-            }
-            if (body.endereco() != null && !body.endereco().isBlank()) {
-                instituicao.setEndereco(body.endereco());
-            }
-            if (body.categoria() != null) {
-                instituicao.setCategoria(body.categoria());
-            }
-            if (body.senha() != null && !body.senha().isBlank()) {
-                instituicao.setSenha(passwordEncoder.encode(body.senha()));
-            }
-            if (body.imagemPerfil() != null && !body.imagemPerfil().isBlank()) {
-                instituicao.setImagemPerfil(body.imagemPerfil());
-            }
-
-            repository.save(instituicao);
-            return ResponseEntity.ok(instituicao);
+        if (optionalInstituicao.isEmpty()) {
+            return ResponseEntity.notFound().build();
         }
 
-        return ResponseEntity.notFound().build();
+        Instituicao instituicao = optionalInstituicao.get();
+
+        if (!instituicao.getEmail().equals(emailToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        if (!passwordEncoder.matches(body.senhaAtual(), instituicao.getSenha())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Senha atual incorreta");
+        }
+
+        if (body.nomeInstituicao() != null && !body.nomeInstituicao().isBlank()) {
+            instituicao.setNomeInstituicao(body.nomeInstituicao());
+        }
+        if (body.email() != null && !body.email().isBlank()) {
+            instituicao.setEmail(body.email());
+        }
+        if (body.telefone() != null && !body.telefone().isBlank()) {
+            instituicao.setTelefone(body.telefone());
+        }
+        if (body.endereco() != null && !body.endereco().isBlank()) {
+            instituicao.setEndereco(body.endereco());
+        }
+        // Agora trata a categoria recebida como string
+        if (body.categoria() != null && !body.categoria().isBlank()) {
+            try {
+                CategoriasInstituicao categoriaEnum = CategoriasInstituicao.valueOf(body.categoria().toUpperCase());
+                instituicao.setCategoria(categoriaEnum);
+            } catch (IllegalArgumentException e) {
+                return ResponseEntity.badRequest().body("Categoria inválida.");
+            }
+        }
+
+        repository.save(instituicao);
+        return ResponseEntity.ok().build();
     }
 
-//    @PutMapping("/{id}")
-//    public ResponseEntity<Instituicao> updateInstituicao(@PathVariable Long id, @RequestBody RegisterInstituicaoDTO body) {
-//        if (!instituicaoService.validaCategoria(String.valueOf(body.categoria()))) { // Chamando validação do serviço
-//            return ResponseEntity.badRequest().body(null);
-//        }
-//
-//        Optional<Instituicao> optionalInstituicao = repository.findById(id);
-//        if (optionalInstituicao.isPresent()) {
-//            Instituicao instituicao = optionalInstituicao.get();
-//            instituicao.setNomeInstituicao(body.nomeInstituicao());
-//            instituicao.setEmail(body.email());
-//            instituicao.setSenha(body.senha());
-//            instituicao.setCategoria(body.categoria());
-//            instituicao.setCnpj(body.cnpj());
-//            instituicao.setEndereco(body.endereco());
-//            instituicao.setTelefone(body.telefone());
-//            repository.save(instituicao);
-//            return ResponseEntity.ok(instituicao);
-//        }
-//        return ResponseEntity.notFound().build();
-//    }
-
-    // Deletar por ID
+    // Deleta instituição com confirmação de senha
     @DeleteMapping("/{id}")
-    public ResponseEntity<Void> deleteInstituicao(@PathVariable Long id) {
-        if (repository.existsById(id)) {
-            repository.deleteById(id);
-            return ResponseEntity.noContent().build();
+    public ResponseEntity<?> deleteInstituicao(
+            @PathVariable Long id,
+            @RequestBody(required = false) SenhaConfirmacaoDTO body,
+            @RequestHeader("Authorization") String token
+    ) {
+        String emailToken = tokenService.validaToken(token.replace("Bearer ", ""));
+        Optional<Instituicao> optionalInstituicao = repository.findById(id);
+
+        if (optionalInstituicao.isEmpty()) {
+            return ResponseEntity.notFound().build();
         }
-        return ResponseEntity.notFound().build();
+
+        Instituicao instituicao = optionalInstituicao.get();
+
+        if (!instituicao.getEmail().equals(emailToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        if (body == null || body.senha() == null || !passwordEncoder.matches(body.senha(), instituicao.getSenha())) {
+            return ResponseEntity.status(HttpStatus.FORBIDDEN).body("Senha incorreta");
+        }
+
+        repository.delete(instituicao);
+        return ResponseEntity.noContent().build();
     }
 
-    // Para ver se funciona pegando a lista de Enum Categoria
+    // Lista todas as categorias disponíveis (enums)
     @GetMapping("/categorias")
     public ResponseEntity<List<String>> listarCategorias() {
         List<String> categorias = List.of(CategoriasInstituicao.values())
@@ -214,6 +225,64 @@ public class InstituicaoController {
                 .map(Enum::name)
                 .toList();
         return ResponseEntity.ok(categorias);
+    }
+
+    // Altera a senha da instituição
+    @PutMapping("/{id}/alterar-senha")
+    public ResponseEntity<Void> alterarSenha(
+            @PathVariable Long id,
+            @RequestBody @Valid AlterarSenhaDTO body
+    ) {
+        Optional<Instituicao> optionalInstituicao = repository.findById(id);
+
+        if (optionalInstituicao.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Instituicao instituicao = optionalInstituicao.get();
+
+        // Valida se a senha atual está correta
+        if (!passwordEncoder.matches(body.senhaAtual(), instituicao.getSenha())) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        // Atualiza para a nova senha criptografada
+        instituicao.setSenha(passwordEncoder.encode(body.novaSenha()));
+        repository.save(instituicao);
+
+        return ResponseEntity.noContent().build();
+    }
+
+
+    //Add Imagem de perfil
+    @PutMapping("/{id}/imagem")
+    public ResponseEntity<?> atualizarImagemPerfil(
+            @PathVariable Long id,
+            @RequestParam("imagem") MultipartFile imagem,
+            @RequestHeader("Authorization") String token
+    ) {
+        String emailToken = tokenService.validaToken(token.replace("Bearer ", ""));
+        Optional<Instituicao> optionalInstituicao = repository.findById(id);
+
+        if (optionalInstituicao.isEmpty()) {
+            return ResponseEntity.notFound().build();
+        }
+
+        Instituicao instituicao = optionalInstituicao.get();
+
+        if (!instituicao.getEmail().equals(emailToken)) {
+            return ResponseEntity.status(HttpStatus.UNAUTHORIZED).build();
+        }
+
+        try {
+            byte[] imagemBytes = imagem.getBytes();
+            String base64Imagem = Base64.getEncoder().encodeToString(imagemBytes);
+            instituicao.setImagemPerfil(base64Imagem);
+            repository.save(instituicao);
+            return ResponseEntity.ok().build();
+        } catch (Exception e) {
+            return ResponseEntity.status(HttpStatus.INTERNAL_SERVER_ERROR).body("Erro ao processar a imagem");
+        }
     }
 
 }

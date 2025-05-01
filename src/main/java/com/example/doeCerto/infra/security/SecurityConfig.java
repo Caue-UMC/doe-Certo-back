@@ -93,7 +93,7 @@ public class SecurityConfig {
                                 .requestMatchers(HttpMethod.POST, "/instituicoes/cadastro").permitAll()
                                 .requestMatchers(HttpMethod.POST, "/instituicoes/login").permitAll()
                                 .requestMatchers(HttpMethod.GET, "/instituicoes/**").permitAll() // ✅ AQUI CORRIGIDO
-                                .requestMatchers(HttpMethod.GET, "/produtos/**").permitAll()
+                                .requestMatchers(HttpMethod.GET, "/lista/**").permitAll()
                                 .requestMatchers(HttpMethod.GET, "/categorias").permitAll()
                                 .anyRequest().authenticated()
                 )

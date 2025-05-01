@@ -9,8 +9,8 @@ import lombok.NoArgsConstructor;
 @AllArgsConstructor
 @NoArgsConstructor
 @Entity
-@Table(name = "produtos")
-public class Produto {
+@Table(name = "lista")
+public class Lista {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)

@@ -2,8 +2,8 @@ package com.example.doeCerto.dtos;
 
 import com.example.doeCerto.domain.StatusProduto;
 
-public record ProdutoResponseDTO(
-        String nomeProduto,
+public record ListaResponseDTO(
+        String nome,
         String descricao,
         StatusProduto status,
         String nomeInstituicao,
